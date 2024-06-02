@@ -1,0 +1,19 @@
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
+    tagsSorter: alpha
+    #disable-swagger-default-url: true
+  info:
+    title: HMAC API
+    description: API pour générer et vérifier des HMAC
+    version: 1.0.0
+    contact:
+      name: Your Name
+      email: your-email@example.com
+      url: https://example.com
+    license:
+      name: Apache 2.0
+      url: http://springdoc.org
