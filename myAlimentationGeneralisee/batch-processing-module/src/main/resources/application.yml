@@ -1,9 +1,9 @@
 server:
-  port: 8081
+  port: 8082
 
 spring:
   application:
-    name: notification-service
+    name: batch-service
   main:
     allow-bean-definition-overriding: true
   datasource:
@@ -25,4 +25,7 @@ spring:
 logging:
   level:
     root: INFO
-    com.example.notification: DEBUG
+    com.example.batch: DEBUG
+
+event-service:
+  url: http://event-service/save-event
