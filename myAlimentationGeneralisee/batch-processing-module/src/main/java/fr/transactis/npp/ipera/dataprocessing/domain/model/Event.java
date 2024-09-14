@@ -13,7 +13,7 @@ import javax.persistence.Id;
 @ToString
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@Builder;
 public class Event {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
