@@ -1,0 +1,8 @@
+spring:
+  application:
+    name: MyOauth2CacheManager
+  cache:
+    type: ehcache
+
+ehcache:
+  ttl-seconds: 3600  # Les tokens expirent après 1 heure
