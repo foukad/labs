@@ -1,36 +1,19 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: springboot-with-nginx
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: myapp
-  template:
-    metadata:
-      labels:
-        app: myapp
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:latest
-        ports:
-        - containerPort: 443
-        volumeMounts:
-        - name: nginx-config-volume
-          mountPath: /etc/nginx/nginx.conf
-          subPath: nginx.conf
-        - name: certs
-          mountPath: /etc/nginx/certs
-      - name: springboot-app
-        image: myapp:latest
-        ports:
-        - containerPort: 8080
-      volumes:
-      - name: nginx-config-volume
-        configMap:
-          name: nginx-config
-      - name: certs
-        secret:
-          secretName: my-tls-secret
+
+server {
+    listen 443 ssl;
+    server_name yourdomain.com;
+
+    ssl_certificate /etc/nginx/certs/tls.crt;
+    ssl_certificate_key /etc/nginx/certs/tls.key;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+
+    location / {
+        proxy_pass http://localhost:8080;  # Redirige vers l'application Spring Boot
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
