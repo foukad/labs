@@ -1,37 +1,36 @@
-import java.util.Map;
-import java.util.TreeMap;
-
-public class SortQueryString {
-    public static void main(String[] args) {
-        String query = "slimite=10&offset=2";
-        String sortedQuery = sortQueryString(query);
-        System.out.println(sortedQuery); // Affiche: offset=2&slimite=10
-    }
-
-    public static String sortQueryString(String query) {
-        // Utiliser un TreeMap pour trier les clés
-        Map<String, String> paramsMap = new TreeMap<>();
-
-        // Diviser la chaîne en paires clé=valeur
-        String[] params = query.split("&");
-
-        // Ajouter chaque paramètre dans la map
-        for (String param : params) {
-            String[] keyValue = param.split("=");
-            if (keyValue.length == 2) {
-                paramsMap.put(keyValue[0], keyValue[1]);
-            }
-        }
-
-        // Construire la chaîne triée
-        StringBuilder sortedQuery = new StringBuilder();
-        for (Map.Entry<String, String> entry : paramsMap.entrySet()) {
-            if (sortedQuery.length() > 0) {
-                sortedQuery.append("&");
-            }
-            sortedQuery.append(entry.getKey()).append("=").append(entry.getValue());
-        }
-
-        return sortedQuery.toString();
-    }
-}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: springboot-with-nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest
+        ports:
+        - containerPort: 443
+        volumeMounts:
+        - name: nginx-config-volume
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        - name: certs
+          mountPath: /etc/nginx/certs
+      - name: springboot-app
+        image: myapp:latest
+        ports:
+        - containerPort: 8080
+      volumes:
+      - name: nginx-config-volume
+        configMap:
+          name: nginx-config
+      - name: certs
+        secret:
+          secretName: my-tls-secret
