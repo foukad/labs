@@ -1,0 +1,182 @@
+Pas de souci, je vais te guider étape par étape pour installer Loki + Promtail + Grafana sur Kubernetes afin de collecter les logs de tes API. Ces outils sont légers et bien adaptés à l'observabilité dans Kubernetes. Voici comment les configurer :
+
+1. Prérequis
+Kubernetes cluster : Tu dois avoir un cluster Kubernetes fonctionnel.
+Helm : L’outil de gestion de paquets Helm doit être installé. Si ce n’est pas déjà le cas, tu peux l’installer en suivant cette documentation.
+2. Installer Loki avec Helm
+Loki est le serveur qui va stocker et indexer les logs. Nous allons utiliser Helm pour simplifier l’installation.
+
+Ajouter le dépôt Grafana à Helm :
+
+bash
+Copier le code
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+Installer Loki :
+
+bash
+Copier le code
+helm install loki grafana/loki-stack --set grafana.enabled=false
+Cette commande installe Loki et désactive Grafana car nous l'installerons séparément pour une meilleure configuration.
+
+3. Installer Promtail (Agent de collecte des logs)
+Promtail est l'agent qui collecte les logs de Kubernetes et les envoie à Loki.
+
+Installer Promtail :
+
+bash
+Copier le code
+helm install promtail grafana/promtail
+Promtail va automatiquement commencer à collecter les logs des pods en utilisant les logs générés par les conteneurs dans Kubernetes.
+
+4. Installer Grafana
+Grafana te permettra de visualiser et explorer les logs envoyés à Loki.
+
+Installer Grafana avec Helm :
+
+bash
+Copier le code
+helm install grafana grafana/grafana
+Obtenir le mot de passe admin de Grafana : Pour te connecter à Grafana, tu auras besoin du mot de passe par défaut généré lors de l'installation. Utilise la commande suivante pour le récupérer :
+
+bash
+Copier le code
+kubectl get secret --namespace default grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+Accéder à Grafana :
+
+Pour exposer Grafana, exécute :
+bash
+Copier le code
+kubectl port-forward service/grafana 3000:80
+Ensuite, ouvre ton navigateur et accède à http://localhost:3000.
+Connecte-toi avec admin comme nom d'utilisateur et le mot de passe récupéré à l'étape précédente.
+5. Configurer Loki comme source de données dans Grafana
+Une fois connecté à Grafana, tu dois ajouter Loki comme source de données pour visualiser les logs :
+
+Dans Grafana, va dans Configuration (icône d'engrenage) -> Data Sources.
+Clique sur Add data source et choisis Loki.
+Dans l'URL de Loki, entre http://loki:3100.
+Clique sur Save & Test. Grafana va vérifier la connexion avec Loki.
+6. Visualisation des Logs dans Grafana
+Après avoir configuré Loki comme source de données, tu pourras explorer les logs en suivant ces étapes :
+
+Va dans Explore (icône en forme de boussole sur la gauche).
+Sélectionne Loki comme source de données.
+Tu peux maintenant utiliser des labels Kubernetes pour filtrer les logs. Par exemple, tu peux taper :
+logql
+Copier le code
+{namespace="default", pod="mon-api-pod"}
+Cela affichera les logs pour un pod spécifique dans le namespace "default".
+7. Affiner la configuration (facultatif)
+Tu peux personnaliser Promtail pour filtrer ou formater les logs si nécessaire. Le fichier de configuration de Promtail est habituellement un fichier values.yaml dans le chart Helm, où tu peux ajuster les pipelines et les chemins des logs.
+
+8. Monitoring et alertes
+Grafana permet également de configurer des alertes basées sur les logs. Tu pourras définir des règles pour être notifié en cas de messages d'erreur critiques ou d'anomalies.
+
+Avec cette configuration de Loki + Promtail + Grafana, tu auras une solution complète et simple pour collecter et visualiser les logs de tes API dans Kubernetes. N'hésite pas si tu as besoin d'aide supplémentaire pour ajuster cette configuration.
+
+
+
+
+
+
+Vous avez dit :
+peux tu me détailler l'étape 8 
+ChatGPT a dit :
+ChatGPT
+L'étape 8 consiste à configurer des alertes dans Grafana basées sur les logs collectés par Loki. Cela permet de recevoir des notifications lorsque des événements critiques se produisent, comme des erreurs dans tes API. Voici un guide détaillé pour mettre en place des alertes :
+
+1. Activer Grafana Alerts
+Depuis Grafana 8, le système d'alerte est unifié et permet de définir des règles d’alertes basées sur des métriques ou des logs. Les alertes dans Grafana peuvent être envoyées par email, Slack, ou d’autres systèmes de notification.
+
+Vérification de l'activation des alertes
+Grafana doit être configuré pour permettre la création d'alertes. Si tu utilises un chart Helm pour déployer Grafana, tu peux vérifier que la fonction d'alerte est activée en consultant les valeurs de ton Helm chart. L'option est généralement activée par défaut.
+
+2. Configurer une règle d’alerte sur les logs Loki
+Créer un tableau de bord avec une requête LogQL
+
+Dans Grafana, clique sur + (icône en forme de croix) et sélectionne Dashboard pour créer un nouveau tableau de bord.
+Ajoute un nouveau Graph Panel et configure une requête Loki pour filtrer les logs pertinents. Par exemple, pour capturer des erreurs HTTP 500 dans les logs :
+logql
+Copier le code
+{job="api"} |= "500"
+Cela signifie que tu recherches les logs qui contiennent le code d’erreur 500 dans les logs du job api.
+Convertir la requête en métrique pour l'alerte
+
+Dans le panneau de configuration du graphe, clique sur Transform pour convertir cette requête en métrique (par exemple, en comptant le nombre de fois où une erreur 500 apparaît).
+Utilise l’agrégateur count_over_time pour surveiller la fréquence des erreurs. Par exemple :
+logql
+Copier le code
+count_over_time({job="api"} |= "500" [5m])
+Cette requête compte le nombre d’erreurs 500 dans les logs de l'API au cours des 5 dernières minutes.
+Configurer la règle d'alerte
+
+Dans le même panneau, clique sur l'onglet Alert et active l'alerte en cliquant sur Create Alert.
+Spécifie une condition pour l'alerte. Par exemple, tu peux déclencher l’alerte si le nombre d’erreurs dépasse 10 dans les 5 dernières minutes :
+text
+Copier le code
+WHEN count_over_time({job="api"} |= "500" [5m]) > 10
+Définis la période d’évaluation (Evaluation Interval). C’est la fréquence à laquelle Grafana va vérifier si la condition d'alerte est remplie, par exemple toutes les 1 minute.
+Ajouter des notifications
+
+Après avoir défini la condition, tu peux choisir où envoyer les notifications. Dans l’onglet Notifications, tu peux choisir un canal de notification (email, Slack, etc.).
+Si tu n’as pas encore configuré de canal de notification, va dans Alerting -> Notification channels et configure un nouveau canal :
+Pour email : tu entres l'adresse email où tu veux recevoir les alertes.
+Pour Slack : tu entres l'URL du webhook Slack.
+Sauvegarder la règle d’alerte Une fois tout configuré, clique sur Save pour sauvegarder ton tableau de bord et activer la règle d’alerte. Grafana surveillera les logs et t’enverra des notifications si les conditions sont remplies.
+
+3. Configurer un canal de notification (email, Slack, etc.)
+Configurer un canal de notification
+
+Va dans Alerting -> Notification channels dans le menu principal de Grafana.
+Clique sur Add channel pour créer un nouveau canal de notification.
+Choisis ton type de notification, comme email, Slack, ou autre.
+Exemple pour un email
+
+Sélectionne Email dans le type de notification.
+Entre l’adresse email de destination.
+Définis d’autres options comme le Message Template pour personnaliser le contenu des alertes.
+Clique sur Save pour sauvegarder le canal.
+Exemple pour Slack
+
+Sélectionne Slack dans le type de notification.
+Colle l’URL du webhook Slack (que tu peux obtenir en créant un webhook dans ton espace Slack).
+Sauvegarde le canal, et les alertes seront envoyées à ce canal Slack.
+4. Tester la règle d’alerte
+Une fois la règle d’alerte configurée, tu peux tester son fonctionnement :
+
+Simuler des logs d'erreurs en générant des erreurs dans ton API pour déclencher l’alerte.
+Vérifie si l'alerte est bien déclenchée dans Grafana et si tu reçois les notifications (via email, Slack, etc.).
+5. Optimiser les alertes (facultatif)
+Seuils multiples : Tu peux créer des seuils d'alerte multiples (par exemple, un avertissement si 5 erreurs sont détectées, une alerte critique si 10 erreurs sont détectées).
+Notifications périodiques : Tu peux configurer les alertes pour qu’elles soient récurrentes toutes les X minutes jusqu’à résolution du problème.
+Auto-résolution : Grafana peut aussi t'envoyer une notification lorsqu’une alerte n’est plus valide (par exemple, si les erreurs 500 diminuent à nouveau sous le seuil critique).
+En configurant cette stratégie d'alerte avec Loki, Promtail et Grafana, tu pourras recevoir des notifications proactives en cas de problèmes dans tes logs API, tout en utilisant une solution open source gratuite et simple à maintenir.
+
+Oui, avec la solution utilisant Loki pour la collecte des logs, tes logs sont effectivement historisés. Voici comment cela fonctionne :
+
+Historisation des logs avec Loki
+Stockage des logs :
+
+Loki stocke les logs de manière persistante dans des fichiers ou une base de données. Tu peux configurer Loki pour qu'il utilise des disques persistants dans Kubernetes, ce qui permet de conserver les logs même si les pods sont redémarrés ou si le cluster est mis à l'échelle.
+Par défaut, Loki ne fait pas d'indexation des logs comme le fait Elasticsearch, mais il les conserve dans un format compressé et optimisé pour la recherche.
+Durée de conservation :
+
+Tu peux configurer la durée de conservation des logs dans Loki. Par exemple, tu peux spécifier combien de temps Loki doit conserver les logs avant de les supprimer automatiquement. Cela est généralement défini dans le fichier de configuration de Loki (loki-config.yaml ou équivalent) dans la section table_manager.
+Voici un exemple de configuration pour définir la durée de conservation :
+
+yaml
+Copier le code
+retention:
+  period: 30d  # Les logs seront conservés pendant 30 jours
+Accès historique :
+
+Une fois que les logs sont stockés, tu peux les interroger dans Grafana en utilisant LogQL, qui est le langage de requête de Loki. Tu peux effectuer des recherches sur les logs historiques et créer des visualisations basées sur ces données.
+Utilisation des labels :
+
+Loki permet d'ajouter des labels à tes logs, ce qui facilite le filtrage et la recherche. Par exemple, tu pourrais ajouter des labels basés sur le nom de l'application, le niveau de log (info, erreur, etc.), ou tout autre critère pertinent. Cela rendra l'accès à l'historique des logs plus organisé et efficace.
+Conclusion
+Historisation : Oui, tes logs sont historisés et peuvent être consultés à tout moment tant qu'ils respectent la durée de conservation que tu as définie.
+Configuration flexible : Tu as la possibilité de configurer la durée de conservation des logs et d'ajouter des labels pour améliorer l'accessibilité et l'organisation des données.
+Ainsi, avec Loki, tu as une solution robuste pour l'historisation et la gestion des logs dans ton environnement Kubernetes. Si tu as d'autres questions ou si tu souhaites des précisions supplémentaires, n'hésite pas à demander !
+
