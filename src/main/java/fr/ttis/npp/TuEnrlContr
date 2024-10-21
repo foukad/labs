@@ -1,0 +1,63 @@
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.test.web.client.TestRestTemplate;
+import org.springframework.http.MediaType;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+public class EnrollmentProcessControllerTest {
+
+    @Autowired
+    private TestRestTemplate restTemplate;
+
+    // URL de l'endpoint que tu veux tester
+    private final String url = "/enroll";
+
+    @Test
+    public void testMultithreadedEnrollmentController() throws InterruptedException {
+        // Crée un pool de threads avec 10 threads
+        ExecutorService executor = Executors.newFixedThreadPool(10);
+
+        // Exécuter 10 requêtes simultanément
+        for (int i = 0; i < 10; i++) {
+            final int threadId = i;
+            executor.submit(() -> {
+                try {
+                    // Créer une requête HTTP avec des headers
+                    HttpHeaders headers = new HttpHeaders();
+                    headers.setContentType(MediaType.APPLICATION_JSON);
+                    headers.set("X-REQUEST-ID", "request-" + threadId); // Chaque thread aura un ID unique
+                    headers.set("SIGNATURE_HEADER", "signature_" + threadId);
+                    
+                    // Créer un body JSON pour la requête (tu devras ajuster selon tes besoins)
+                    String body = "{ \"appCode\": \"APP_" + threadId + "\", \"consumerName\": \"Consumer_" + threadId + "\" }";
+
+                    HttpEntity<String> request = new HttpEntity<>(body, headers);
+
+                    // Effectuer l'appel POST à l'endpoint du contrôleur
+                    ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, request, String.class);
+
+                    // Vérifier que la réponse est bien 201 CREATED ou 202 selon ton endpoint
+                    assertEquals(HttpStatus.CREATED, response.getStatusCode(), "Thread " + threadId + " n'a pas réussi avec la bonne réponse");
+                } catch (Exception e) {
+                    System.err.println("Erreur dans le thread " + threadId + ": " + e.getMessage());
+                }
+            });
+        }
+
+        // Attendre que tous les threads aient fini leurs tâches
+        executor.shutdown();
+        executor.awaitTermination(1, TimeUnit.MINUTES);
+    }
+}
