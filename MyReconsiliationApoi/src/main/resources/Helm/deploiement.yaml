@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reconciliation-scheduler
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: reconciliation-scheduler
+  template:
+    metadata:
+      labels:
+        app: reconciliation-scheduler
+    spec:
+      containers:
+        - name: scheduler
+          image: my-reconciliation-scheduler:latest
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: reconciliation-config
+          env:
+            - name: AWS_REGION
+              value: "eu-west-1"
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+          volumeMounts:
+            - name: scheduler-keys
+              mountPath: /keys
+              readOnly: true
+          command: ["java", "-jar", "/app/scheduler.jar"]
+      volumes:
+        - name: scheduler-keys
+          secret:
+            secretName: scheduler-keys

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: reconciliation-config
+  namespace: default
+data:
+  scheduler.cron: "0 0 6 * * ?" # Tous les jours à 6h UTC
