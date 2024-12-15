@@ -1,0 +1,2 @@
+scheduler:
+  cron: "0 0 6 * * ?" # Exécuter tous les jours à 6h UTC
