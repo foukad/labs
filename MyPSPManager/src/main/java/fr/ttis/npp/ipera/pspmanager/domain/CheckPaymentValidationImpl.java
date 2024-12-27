@@ -1,110 +1,72 @@
-package ff.transactis.sip.npp.domain;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import reactor.core.publisher.Mono;
-
-import java.util.Optional;
-
+@Service
 public class CheckPaymentValidationImpl implements ICheckPaymentValidation {
 
-    private final IPaymentMeanRepository paymentMeanRepository;
-    private final IPaymentSourceRepository paymentSourceRepository;
-    private final IConsumerRepository consumerRepository;
-    private final EventService eventService;
+    private static final String NOT_FOUND = "not found";
 
-    public CheckPaymentValidationImpl(IPaymentMeanRepository paymentMeanRepository,
-                                       IPaymentSourceRepository paymentSourceRepository,
-                                       IConsumerRepository consumerRepository,
-                                       EventService eventService) {
-        this.paymentMeanRepository = paymentMeanRepository;
-        this.paymentSourceRepository = paymentSourceRepository;
-        this.consumerRepository = consumerRepository;
+    private final IPaymentMeanRepository iPaymentMeanRepository;
+    private final IPaymentSourceRepository iPaymentSourceRepository;
+    private final IConsumerRepository iConsumerRepository;
+    private final EventService eventService;
+    private final NotificationService notificationService;
+
+    public CheckPaymentValidationImpl(IPaymentMeanRepository iPaymentMeanRepository,
+                                      IPaymentSourceRepository iPaymentSourceRepository,
+                                      IConsumerRepository iConsumerRepository,
+                                      EventService eventService,
+                                      NotificationService notificationService) {
+        this.iPaymentMeanRepository = iPaymentMeanRepository;
+        this.iPaymentSourceRepository = iPaymentSourceRepository;
+        this.iConsumerRepository = iConsumerRepository;
         this.eventService = eventService;
+        this.notificationService = notificationService;
     }
 
     @Override
     public ResponseEntity<PaymentValidationResponse> execute(PaymentValidationRequest request, String requestId) {
-        try {
-            PaymentValidationData validationData = validateAndRetrieveData(request);
+        validateRequest(request);
 
-            // Save event asynchronously
-            saveEventAsync(requestId, validationData);
+        PaymentData paymentData = fetchPaymentData(request);
 
-            // Return successful response
-            return ResponseEntity.ok(
-                PaymentValidationResponse.builder()
-                    .allowed(true)
-                    .beneficiaryName(validationData.getBeneficiaryName())
-                    .build()
-            );
+        PaymentValidationResponse response = processPayment(paymentData, requestId);
 
-        } catch (ValidationException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
-                PaymentValidationResponse.builder()
-                    .allowed(false)
-                    .errorMessage(e.getMessage())
-                    .build()
-            );
+        saveEvent(response, requestId);
+
+        return ResponseEntity.ok(response);
+    }
+
+    private void validateRequest(PaymentValidationRequest request) {
+        if (request == null || request.getOriginatorPaymentMeansId() == null) {
+            throw new ValidationException("Payment means ID is mandatory");
         }
     }
 
-    private PaymentValidationData validateAndRetrieveData(PaymentValidationRequest request) {
-        // Validate Payment Mean
-        PaymentMean paymentMean = paymentMeanRepository.findById(request.getOriginatorPaymentMeansId())
-            .orElseThrow(() -> new ValidationException("Payment Means not found"));
+    private PaymentData fetchPaymentData(PaymentValidationRequest request) {
+        PaymentMean paymentMean = iPaymentMeanRepository.findById(request.getOriginatorPaymentMeansId())
+                .orElseThrow(() -> new NotFoundException("Payment means not found"));
 
-        // Validate Payment Source
-        PaymentSource paymentSource = paymentSourceRepository
-            .findByPaySrcEpiAndWalletEpi(paymentMean.getPaymentSourceEpi(), paymentMean.getWalletEpi())
-            .orElseThrow(() -> new ValidationException("Payment Source not found"));
+        PaymentSource paymentSource = iPaymentSourceRepository
+                .findByPaySrcEpiAndWalletEpi(paymentMean.getPaymentSourceEpi(), paymentMean.getWalletId())
+                .orElseThrow(() -> new NotFoundException("Payment source not found"));
 
-        // Validate Consumer
-        Consumer consumer = consumerRepository.findByIdConsPsp(paymentSource.getIdConsPsp())
-            .orElseThrow(() -> new ValidationException("Consumer not found"));
-
-        return new PaymentValidationData(
-            consumer.getFirstName() + " " + consumer.getLastName(),
-            paymentMean.getWalletEpi(),
-            paymentMean.getPaymentSourceEpi()
-        );
+        return new PaymentData(paymentMean, paymentSource);
     }
 
-    private Mono<Void> saveEventAsync(String requestId, PaymentValidationData data) {
-        return Mono.fromRunnable(() -> {
-            EventHistory event = EventHistory.builder()
-                .idEvt("eventId")
-                .requestId(requestId)
-                .consumerId(data.getConsumerId())
-                .status("SUCCESS")
+    private PaymentValidationResponse processPayment(PaymentData paymentData, String requestId) {
+        boolean isAllowed = notificationService.callNotifyPpPreliminaryFeasibilityCheck(paymentData, requestId);
+
+        return PaymentValidationResponse.builder()
+                .allowed(isAllowed)
+                .idConsPsp(paymentData.getPaymentMean().getIdConsPsp())
+                .ibanAccountIdentifier(paymentData.getPaymentSource().getIban())
+                .build();
+    }
+
+    private void saveEvent(PaymentValidationResponse response, String requestId) {
+        EventHistory eventHistory = EventHistory.builder()
+                .idEvt(response.getIdConsPsp())
+                .statusLib(response.isAllowed() ? "ALLOWED" : "NOT_ALLOWED")
                 .build();
 
-            eventService.saveEvent(event);
-        }).then();
-    }
-
-    // DTO to hold validation data
-    private static class PaymentValidationData {
-        private final String beneficiaryName;
-        private final String walletId;
-        private final String paymentSource;
-
-        public PaymentValidationData(String beneficiaryName, String walletId, String paymentSource) {
-            this.beneficiaryName = beneficiaryName;
-            this.walletId = walletId;
-            this.paymentSource = paymentSource;
-        }
-
-        public String getBeneficiaryName() {
-            return beneficiaryName;
-        }
-
-        public String getWalletId() {
-            return walletId;
-        }
-
-        public String getPaymentSource() {
-            return paymentSource;
-        }
+        Mono.fromFuture(() -> eventService.saveEvent(eventHistory, requestId)).subscribe();
     }
 }
