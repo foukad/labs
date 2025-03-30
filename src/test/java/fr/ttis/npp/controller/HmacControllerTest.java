@@ -52,7 +52,8 @@ public class HmacControllerTest {
     public void testGenerateHmac_Exception() throws Exception {
         String data = "testdata";
 
-        doThrow(new HmacGenerationException("Error generating HMAC", new Exception())).when(hmacUtils).generateHMAC(data, "your-secret-key");
+        doThrow(new HmacGenerationException("Error generating HMAC", new Exception())).when(hmacUtils);
+        HmacUtils.generateHMAC(data, "your-secret-key");
 
         mockMvc.perform(post("/hmac/generate")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -75,6 +76,7 @@ public class HmacControllerTest {
                 .andExpect(content().string("true"));
     }
 
+    @SuppressWarnings("static-access")
     @Test
     public void testVerifyHmac_Exception() throws Exception {
         HmacController.HmacRequest request = new HmacController.HmacRequest();
