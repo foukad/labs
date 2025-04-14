@@ -1,4 +1,3 @@
-Pas de souci, je vais te guider étape par étape pour installer Loki + Promtail + Grafana sur Kubernetes afin de collecter les logs de tes API. Ces outils sont légers et bien adaptés à l'observabilité dans Kubernetes. Voici comment les configurer :
 
 1. Prérequis
 Kubernetes cluster : Tu dois avoir un cluster Kubernetes fonctionnel.
